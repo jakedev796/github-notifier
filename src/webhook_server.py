@@ -61,6 +61,13 @@ class WebhookServer:
                         content={"error": "No event type specified"},
                     )
                 
+                if not x_hub_signature_256:
+                    logger.warning("Webhook request missing X-Hub-Signature-256 header")
+                    return JSONResponse(
+                        status_code=401,
+                        content={"error": "Missing signature"},
+                    )
+
                 repos_to_process = []
                 for repo in repos:
                     if not repo.enabled:
@@ -68,10 +75,9 @@ class WebhookServer:
                         continue
                     
                     webhook_secret = repo.webhook_secret
-                    if x_hub_signature_256:
-                        if not verify_webhook_signature(payload, x_hub_signature_256, webhook_secret):
-                            logger.warning(f"Invalid signature for {repo_full_name} in guild {repo.guild_id}")
-                            continue
+                    if not verify_webhook_signature(payload, x_hub_signature_256, webhook_secret):
+                        logger.warning(f"Invalid signature for {repo_full_name} in guild {repo.guild_id}")
+                        continue
                     
                     repos_to_process.append(repo)
                 
