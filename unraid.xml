@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>GitHub Notifier</Name>
+  <Repository>ghcr.io/jakedev796/github-notifier:latest</Repository>
+  <Registry>https://ghcr.io</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/jakedev796/github-notifier/issues</Support>
+  <Project>https://github.com/jakedev796/github-notifier</Project>
+  <Overview>Discord bot that receives GitHub webhooks and sends notifications to configured Discord channels.</Overview>
+  <Category>Network:Social</Category>
+  <WebUI>http://[IP]:[PORT:8000]/health</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/jakedev796/github-notifier/main/unraid.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/discord/discord-api-docs/main/docs/static/discord-logo.svg</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="Discord Bot Token" Target="DISCORD_BOT_TOKEN" Default="" Mode="" Description="Your Discord bot token from https://discord.com/developers/applications" Type="Variable" Display="always" Required="true" Mask="false">DISCORD_BOT_TOKEN</Config>
+  <Config Name="Webhook Secret" Target="WEBHOOK_SECRET" Default="" Mode="" Description="Default webhook secret (can be overridden per repo)" Type="Variable" Display="always" Required="false" Mask="true">WEBHOOK_SECRET</Config>
+  <Config Name="Webhook Server URL" Target="WEBHOOK_SERVER_URL" Default="http://localhost:8000" Mode="" Description="Public URL of your webhook server (e.g., http://your-server:8000)" Type="Variable" Display="always" Required="false" Mask="false">WEBHOOK_SERVER_URL</Config>
+  <Config Name="Database Path" Target="DATABASE_PATH" Default="/app/data/bot.db" Mode="" Description="Path to SQLite database file" Type="Variable" Display="always" Required="false" Mask="false">DATABASE_PATH</Config>
+  <Config Name="Webhook Port" Target="WEBHOOK_PORT" Default="8000" Mode="" Description="Port for webhook server" Type="Variable" Display="always" Required="false" Mask="false">WEBHOOK_PORT</Config>
+  <Config Name="Webhook Host" Target="WEBHOOK_HOST" Default="0.0.0.0" Mode="" Description="Host for webhook server" Type="Variable" Display="always" Required="false" Mask="false">WEBHOOK_HOST</Config>
+  <Config Name="Log Level" Target="LOG_LEVEL" Default="INFO" Mode="" Description="Logging level (DEBUG, INFO, WARNING, ERROR)" Type="Variable" Display="always" Required="false" Mask="false">LOG_LEVEL</Config>
+  <Config Name="Data Directory" Target="/app/data" Default="/mnt/user/appdata/github-notifier" Mode="rw" Description="Directory for database and persistent data" Type="Path" Display="always" Required="true" Mask="false">/app/data</Config>
+  <Config Name="Webhook Port Mapping" Target="8000" Default="8000" Mode="tcp" Description="Webhook server port" Type="Port" Display="always" Required="true" Mask="false">8000</Config>
+</Container>

@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  github-notifier:
+    build: .
+    container_name: github-notifier
+    restart: unless-stopped
+    environment:
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - WEBHOOK_SERVER_URL=${WEBHOOK_SERVER_URL:-http://localhost:8000}
+      - DATABASE_PATH=/app/data/bot.db
+      - WEBHOOK_PORT=8000
+      - WEBHOOK_HOST=0.0.0.0
+      - LOG_LEVEL=INFO
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
