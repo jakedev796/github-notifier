@@ -13,7 +13,7 @@
   <Category>Network:Social</Category>
   <WebUI>http://[IP]:[PORT:18080]/health</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/jakedev796/github-notifier/main/unraid.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/discord/discord-api-docs/main/docs/static/discord-logo.svg</Icon>
+  <Icon>https://raw.githubusercontent.com/jakedev796/github-notifier/main/misc/github-notifier.jpg</Icon>
   <ExtraParams/>
   <PostArgs/>
   <CPUset/>
