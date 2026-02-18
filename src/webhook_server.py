@@ -4,7 +4,7 @@ import asyncio
 import logging
 import json
 import discord
-from typing import Optional
+from typing import Optional, List
 from .config import Database
 from .formatters import NotificationFormatter
 from .utils import verify_webhook_signature, parse_repo_name, should_notify_branch, should_notify_label, should_notify_author
@@ -44,11 +44,10 @@ class WebhookServer:
                         content={"error": "No repository found in payload"},
                     )
                 
-                repo_name = parse_repo_name(repo_full_name)
-                repos = await self.db.get_repositories_by_name(repo_name)
+                repos = await self.db.get_repositories_by_name(repo_full_name)
                 
                 if not repos:
-                    logger.warning(f"Repository {repo_name} not found in database")
+                    logger.warning(f"Repository {repo_full_name} not found in database")
                     return JSONResponse(
                         status_code=404,
                         content={"error": "Repository not configured"},
@@ -62,28 +61,30 @@ class WebhookServer:
                         content={"error": "No event type specified"},
                     )
                 
-                processed_count = 0
+                repos_to_process = []
                 for repo in repos:
                     if not repo.enabled:
-                        logger.debug(f"Repository {repo_name} in guild {repo.guild_id} is disabled, skipping")
+                        logger.debug(f"Repository {repo_full_name} in guild {repo.guild_id} is disabled, skipping")
                         continue
                     
                     webhook_secret = repo.webhook_secret
                     if x_hub_signature_256:
                         if not verify_webhook_signature(payload, x_hub_signature_256, webhook_secret):
-                            logger.warning(f"Invalid signature for {repo_name} in guild {repo.guild_id}")
+                            logger.warning(f"Invalid signature for {repo_full_name} in guild {repo.guild_id}")
                             continue
                     
-                    await self.process_webhook(repo.id, repo.guild_id, event_type, payload_json)
-                    processed_count += 1
+                    repos_to_process.append(repo)
+                
+                if repos_to_process:
+                    asyncio.create_task(self.process_webhooks_async(repos_to_process, event_type, payload_json))
                 
                 return JSONResponse(
                     status_code=200,
                     content={
-                        "status": "processed",
+                        "status": "accepted",
                         "event": event_type,
-                        "repository": repo_name,
-                        "guilds_processed": processed_count,
+                        "repository": repo_full_name,
+                        "guilds_queued": len(repos_to_process),
                     },
                 )
             except json.JSONDecodeError:
@@ -98,6 +99,13 @@ class WebhookServer:
                     status_code=500,
                     content={"error": "Internal server error"},
                 )
+
+    async def process_webhooks_async(self, repos: List, event_type: str, payload: dict):
+        for repo in repos:
+            try:
+                await self.process_webhook(repo.id, repo.guild_id, event_type, payload)
+            except Exception as e:
+                logger.error(f"Error processing webhook for repo {repo.id}: {e}", exc_info=True)
 
     async def process_webhook(self, repo_id: int, guild_id: int, event_type: str, payload: dict):
         try:

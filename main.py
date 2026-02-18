@@ -48,6 +48,8 @@ async def main():
                 host=webhook_host,
                 port=webhook_port,
                 log_level=os.getenv("LOG_LEVEL", "info").lower(),
+                timeout_keep_alive=30,
+                timeout_graceful_shutdown=10,
             )
             server = uvicorn.Server(config)
             await server.serve()
