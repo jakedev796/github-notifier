@@ -114,6 +114,8 @@ Push, Pull Requests, Issues, Releases, Deployments, Workflow Runs, Stars, Forks
 
 **Webhooks not working** — Verify the webhook URL is publicly accessible, the secret matches between GitHub and the bot, and the repo is configured (`/list repos`).
 
+**502 Bad Gateway (Cloudflare)** — If using Cloudflare proxy (orange cloud), disable it for your webhook endpoint (set DNS to "DNS only" / gray cloud). The webhook handler processes requests asynchronously to avoid timeout issues, but Cloudflare's proxy can still cause problems.
+
 **Missing notifications** — Check that the event type is enabled for the repo and that filters aren't excluding the event.
 
 ## License
