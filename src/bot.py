@@ -30,6 +30,9 @@ class NotificationBot(commands.Bot):
             logger.info(f"Successfully synced {len(synced)} command(s) to Discord")
             for cmd in synced:
                 logger.debug(f"  - /{cmd.name}")
+            
+            existing_commands = {cmd.name for cmd in self.tree.get_commands()}
+            logger.debug(f"Registered commands: {', '.join(sorted(existing_commands))}")
         except Exception as e:
             logger.error(f"Error syncing commands: {e}", exc_info=True)
 
@@ -170,9 +173,7 @@ class EventTypesAdjustView(discord.ui.View):
         self.select.callback = self.select_notifications
         self.add_item(self.select)
 
-    async def select_notifications(
-        self, interaction: discord.Interaction, select: discord.ui.Select
-    ):
+    async def select_notifications(self, interaction: discord.Interaction):
         await interaction.response.defer()
         
         try:
@@ -187,7 +188,7 @@ class EventTypesAdjustView(discord.ui.View):
             
             existing_channels = await self.bot.db.get_notification_channels(repo.id)
             existing_event_types = {ch.event_type for ch in existing_channels}
-            selected_event_types = set(select.values)
+            selected_event_types = set(self.select.values)
             
             event_types_to_add = selected_event_types - existing_event_types
             event_types_to_remove = existing_event_types - selected_event_types
