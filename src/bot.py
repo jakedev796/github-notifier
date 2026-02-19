@@ -127,6 +127,113 @@ class NotificationSetupView(discord.ui.View):
             await interaction.followup.send(f"Error: {str(e)}", ephemeral=True)
 
 
+class EventTypesAdjustView(discord.ui.View):
+    def __init__(self, bot: NotificationBot, repo_name: str, existing_event_types: set):
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.repo_name = repo_name
+        self.event_types = [
+            "push",
+            "pull_request",
+            "issues",
+            "release",
+            "deployment",
+            "workflow_run",
+            "star",
+            "fork",
+        ]
+        
+        options = [
+            discord.SelectOption(label="Push", value="push", description="Code pushes", default="push" in existing_event_types),
+            discord.SelectOption(label="Pull Requests", value="pull_request", description="PR events", default="pull_request" in existing_event_types),
+            discord.SelectOption(label="Issues", value="issues", description="Issue events", default="issues" in existing_event_types),
+            discord.SelectOption(label="Releases", value="release", description="Release events", default="release" in existing_event_types),
+            discord.SelectOption(label="Deployments", value="deployment", description="Deployment events", default="deployment" in existing_event_types),
+            discord.SelectOption(label="Workflow Runs", value="workflow_run", description="CI/CD workflows", default="workflow_run" in existing_event_types),
+            discord.SelectOption(label="Stars", value="star", description="Repository stars", default="star" in existing_event_types),
+            discord.SelectOption(label="Forks", value="fork", description="Repository forks", default="fork" in existing_event_types),
+        ]
+        
+        self.select = discord.ui.Select(
+            placeholder="Select notification types...",
+            min_values=0,
+            max_values=len(options),
+            options=options,
+        )
+        self.select.callback = self.select_notifications
+        self.add_item(self.select)
+
+    async def select_notifications(
+        self, interaction: discord.Interaction, select: discord.ui.Select
+    ):
+        await interaction.response.defer()
+        
+        try:
+            if not interaction.guild:
+                await interaction.followup.send("This command can only be used in a server.", ephemeral=True)
+                return
+            
+            repo = await self.bot.db.get_repository(self.repo_name, interaction.guild.id)
+            if not repo:
+                await interaction.followup.send("Repository not found.", ephemeral=True)
+                return
+            
+            existing_channels = await self.bot.db.get_notification_channels(repo.id)
+            existing_event_types = {ch.event_type for ch in existing_channels}
+            selected_event_types = set(select.values)
+            
+            event_types_to_add = selected_event_types - existing_event_types
+            event_types_to_remove = existing_event_types - selected_event_types
+            
+            category = None
+            if repo.discord_category_id:
+                category = interaction.guild.get_channel(repo.discord_category_id)
+            
+            if not category:
+                category = await interaction.guild.create_category(name=f"📦 {self.repo_name}")
+                await self.bot.db.update_repository(repo.id, discord_category_id=category.id)
+            
+            created_channels = []
+            deleted_channels = []
+            
+            for event_type in event_types_to_add:
+                channel_name = event_type.replace("_", "-")
+                channel = await category.create_text_channel(name=channel_name)
+                await self.bot.db.create_notification_channel(repo.id, event_type, channel.id)
+                created_channels.append(f"#{channel.name}")
+            
+            for event_type in event_types_to_remove:
+                channel_config = await self.bot.db.get_notification_channel(repo.id, event_type)
+                if channel_config:
+                    channel = interaction.guild.get_channel(channel_config.channel_id)
+                    if channel:
+                        try:
+                            await channel.delete()
+                            deleted_channels.append(f"#{channel.name}")
+                        except Exception as e:
+                            logger.error(f"Error deleting channel {channel.id}: {e}")
+                    await self.bot.db.delete_notification_channel(repo.id, event_type)
+            
+            embed = discord.Embed(
+                title="Event Types Updated",
+                description=f"Event types for **{self.repo_name}** have been updated.",
+                color=0x2ECC71,
+            )
+            
+            if created_channels:
+                embed.add_field(name="Channels Created", value=", ".join(created_channels), inline=False)
+            if deleted_channels:
+                embed.add_field(name="Channels Deleted", value=", ".join(deleted_channels), inline=False)
+            if not created_channels and not deleted_channels:
+                embed.add_field(name="No Changes", value="Event types remain the same.", inline=False)
+            
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            self.stop()
+        except Exception as e:
+            logger.error(f"Error adjusting event types: {e}", exc_info=True)
+            await interaction.followup.send(f"Error: {str(e)}", ephemeral=True)
+
+
 class NotificationConfigModal(discord.ui.Modal, title="Configure Notifications"):
     branch_filter = discord.ui.TextInput(
         label="Branch Filter",
@@ -207,6 +314,17 @@ class NotificationBotCommands(commands.Cog):
     def __init__(self, bot: NotificationBot):
         self.bot = bot
 
+    async def repo_autocomplete(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        if not interaction.guild:
+            return []
+        repos = await self.bot.db.list_repositories(interaction.guild.id)
+        choices = [
+            app_commands.Choice(name=repo.repo_name, value=repo.repo_name)
+            for repo in repos
+            if current.lower() in repo.repo_name.lower()
+        ]
+        return choices[:25]
+
     @app_commands.command(name="setup", description="Set up a new repository for notifications")
     @app_commands.describe(repo_name="Repository name (e.g., owner/repo)")
     async def setup_repo(self, interaction: discord.Interaction, repo_name: str):
@@ -241,6 +359,7 @@ class NotificationBotCommands(commands.Cog):
 
     @app_commands.command(name="configure", description="Configure notification settings for a repository")
     @app_commands.describe(repo_name="Repository name")
+    @app_commands.autocomplete(repo_name=repo_autocomplete)
     async def configure_repo(self, interaction: discord.Interaction, repo_name: str):
         if not interaction.guild:
             await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
@@ -290,6 +409,7 @@ class NotificationBotCommands(commands.Cog):
 
     @app_commands.command(name="remove", description="Remove a repository configuration")
     @app_commands.describe(repo_name="Repository name to remove")
+    @app_commands.autocomplete(repo_name=repo_autocomplete)
     async def remove_repo(self, interaction: discord.Interaction, repo_name: str):
         await interaction.response.defer(ephemeral=True)
         
@@ -341,6 +461,7 @@ class NotificationBotCommands(commands.Cog):
 
     @app_commands.command(name="test", description="Send a test notification for a repository")
     @app_commands.describe(repo_name="Repository name")
+    @app_commands.autocomplete(repo_name=repo_autocomplete)
     async def test_webhook(self, interaction: discord.Interaction, repo_name: str):
         await interaction.response.defer(ephemeral=True)
         
@@ -381,6 +502,31 @@ class NotificationBotCommands(commands.Cog):
             f"Test notification sent to {sent_count} channel(s).",
             ephemeral=True,
         )
+
+    @app_commands.command(name="events", description="Adjust which event types are tracked for a repository")
+    @app_commands.describe(repo_name="Repository name")
+    @app_commands.autocomplete(repo_name=repo_autocomplete)
+    async def adjust_event_types(self, interaction: discord.Interaction, repo_name: str):
+        if not interaction.guild:
+            await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+            return
+        
+        repo = await self.bot.db.get_repository(repo_name, interaction.guild.id)
+        if not repo:
+            await interaction.response.send_message("Repository not found. Use `/setup` first.", ephemeral=True)
+            return
+        
+        existing_channels = await self.bot.db.get_notification_channels(repo.id)
+        existing_event_types = {ch.event_type for ch in existing_channels}
+        
+        view = EventTypesAdjustView(self.bot, repo_name, existing_event_types)
+        
+        embed = discord.Embed(
+            title="Adjust Event Types",
+            description=f"Select which event types you want to track for **{repo_name}**.\n\nCurrently tracked: {', '.join(sorted(existing_event_types)) if existing_event_types else 'None'}",
+            color=0x5865F2,
+        )
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     @app_commands.command(name="export", description="Export configuration as JSON")
     async def export_config(self, interaction: discord.Interaction):
