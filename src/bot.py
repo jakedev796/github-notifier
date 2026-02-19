@@ -24,7 +24,14 @@ class NotificationBot(commands.Bot):
         self.formatter = None
 
     async def setup_hook(self):
-        await self.tree.sync()
+        logger.info("Syncing commands to Discord...")
+        try:
+            synced = await self.tree.sync()
+            logger.info(f"Successfully synced {len(synced)} command(s) to Discord")
+            for cmd in synced:
+                logger.debug(f"  - /{cmd.name}")
+        except Exception as e:
+            logger.error(f"Error syncing commands: {e}", exc_info=True)
 
     async def on_ready(self):
         logger.info(f"Bot logged in as {self.user}")
